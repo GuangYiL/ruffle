@@ -32,7 +32,7 @@ use crate::context_menu::{
 use crate::display_object::Avm2MousePick;
 use crate::display_object::{
     EditText, GotoInfo, InteractiveObject, Stage, StageAlign, StageDisplayState, StageScaleMode,
-    StopOrPlay, TInteractiveObject, WindowMode,
+    StopOrPlay, TDisplayObject, TDisplayObjectContainer, TInteractiveObject, WindowMode,
 };
 use crate::events::GamepadButton;
 use crate::events::PlayerNotification;
@@ -1510,7 +1510,69 @@ impl Player {
                 && context.mouse_data.hovered.is_some();
 
             let new_over_object = if mouse_in_stage {
-                run_mouse_pick(context, true)
+                let picked = run_mouse_pick(context, true);
+                // [diag] 点击命中诊断：打印鼠标下最顶层可交互对象的完整显示路径
+                if !changed_mouse_buttons.is_empty() {
+                    if let Some(obj) = picked {
+                        let mut path: Vec<String> = Vec::new();
+                        let mut cur = Some(obj.as_displayobject());
+                        while let Some(d) = cur {
+                            let me = d
+                                .as_interactive()
+                                .map(|i| i.mouse_enabled())
+                                .unwrap_or(false);
+                            let mc = d
+                                .as_container()
+                                .map(|c| c.raw_container().mouse_children())
+                                .unwrap_or(false);
+                            path.push(format!(
+                                "{}(e={},c={},a={:.2})",
+                                d.name()
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|| "?".to_string()),
+                                me,
+                                mc,
+                                d.alpha()
+                            ));
+                            cur = d.parent();
+                        }
+                        tracing::info!("[diag] mouse_pick path={:?}", path);
+                        // 命中对象的父级兄弟全景（render 顺序 + 深度 + 可交互性）
+                        if let Some(parent) = obj.as_displayobject().parent() {
+                            let mut sibs: Vec<String> = Vec::new();
+                            if let Some(cont) = parent.as_container() {
+                                for child in cont.iter_render_list() {
+                                    sibs.push(format!(
+                                        "{}:d{}:{}",
+                                        child.name().map(|s| s.to_string()).unwrap_or_default(),
+                                        child.depth(),
+                                        if child.as_interactive().is_some() { "I" } else { "g" }
+                                    ));
+                                }
+                            }
+                            tracing::info!("[diag] siblings={:?}", sibs);
+                        }
+                        // 命中对象自身的孩子 + 尺寸
+                        if let Some(cont) = obj.as_displayobject().as_container() {
+                            let mut kids: Vec<String> = Vec::new();
+                            for child in cont.iter_render_list() {
+                                let b = child.world_bounds(crate::display_object::BoundsMode::Engine);
+                                kids.push(format!(
+                                    "{}:d{}:{}:{}x{}",
+                                    child.name().map(|s| s.to_string()).unwrap_or_default(),
+                                    child.depth(),
+                                    if child.as_interactive().is_some() { "I" } else { "g" },
+                                    (b.x_max - b.x_min).to_pixels() as i32,
+                                    (b.y_max - b.y_min).to_pixels() as i32
+                                ));
+                            }
+                            tracing::info!("[diag] children={:?}", kids);
+                        }
+                    } else {
+                        tracing::info!("[diag] mouse_pick: none");
+                    }
+                }
+                picked
             } else {
                 None
             };
@@ -3208,6 +3270,58 @@ pub struct DragObject<'gc> {
     /// The bounding rectangle where the clip will be maintained.
     #[collect(require_static)]
     pub constraint: Rectangle<Twips>,
+}
+
+/// Could this object ever react to a mouse hit by itself (listener, button
+/// behaviour or text input)? Used by the mouse pick fallthrough for "dead"
+/// overlay layers (see `MovieClip::mouse_pick_avm2`).
+#[cfg(target_family = "wasm")]
+pub fn object_reacts_to_mouse<'gc>(
+    context: &mut UpdateContext<'gc>,
+    start: InteractiveObject<'gc>,
+) -> bool {
+    use crate::avm2::globals::slots::flash_events_event_dispatcher as slots;
+    use crate::avm2::object::Object as Avm2Object;
+    use crate::avm2::object::TObject as _;
+    use crate::avm2::Value as Avm2Value;
+    use crate::string::AvmString;
+
+    // Objects that react to the mouse without addEventListener.
+    let d = start.as_displayobject();
+    if d.as_avm2_button().is_some()
+        || d.as_movie_clip()
+            .is_some_and(|mc| mc.is_button_mode(context))
+        || d.as_edit_text().is_some()
+    {
+        return true;
+    }
+
+    const MOUSE_EVENTS: [&str; 9] = [
+        "click",
+        "doubleClick",
+        "mouseDown",
+        "mouseUp",
+        "mouseMove",
+        "mouseOver",
+        "mouseOut",
+        "rollOver",
+        "rollOut",
+    ];
+
+    let Some(stage_obj) = d.object2() else {
+        return false;
+    };
+    let obj = Avm2Object::StageObject(stage_obj);
+    let Avm2Value::Object(dispatch) = obj.get_slot(slots::DISPATCH_LIST) else {
+        return false;
+    };
+    let Some(data) = dispatch.as_dispatch_mut(context.gc()) else {
+        return false;
+    };
+    MOUSE_EVENTS.iter().any(|evt| {
+        let name = AvmString::new_utf8(context.gc(), *evt);
+        data.has_event_listener(name)
+    })
 }
 
 fn run_mouse_pick<'gc>(

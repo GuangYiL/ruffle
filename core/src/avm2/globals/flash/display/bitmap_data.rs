@@ -25,6 +25,7 @@ use crate::bitmap::bitmap_data::{BitmapData, ChannelOptions, ThresholdOperation}
 use crate::bitmap::bitmap_data::{BitmapDataDrawError, IBitmapDrawable};
 use crate::bitmap::{is_size_valid, operations};
 use crate::character::{Character, CompressedBitmap};
+use crate::display_object::TDisplayObject;
 use crate::ecma_conversions::round_to_even;
 use crate::swf::BlendMode;
 use ruffle_render::filters::Filter;
@@ -915,6 +916,16 @@ pub fn draw<'gc>(
     args: FunctionArgs<'_, 'gc>,
 ) -> Result<Value<'gc>, Error<'gc>> {
     let this = this.as_object().unwrap();
+
+    // [diag] mole2 寻路位图绘制诊断
+    if let Some(bmd) = this.as_bitmap_data() {
+        tracing::info!(
+            "[diag] BitmapData.draw dest={}x{} source={:?}",
+            bmd.width(),
+            bmd.height(),
+            args.try_get_object(0).and_then(|o| o.as_display_object()).map(|d| d.name())
+        );
+    }
 
     if let Some(bitmap_data) = this.as_bitmap_data() {
         let mut transform = Transform::default();
