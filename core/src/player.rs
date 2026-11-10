@@ -396,6 +396,14 @@ pub struct Player {
     /// is raised. This defaults to 15 seconds but can be changed.
     max_execution_duration: Duration,
 
+    /// Opt-in compatibility tweak: let AVM2 mouse picks fall through "dead"
+    /// overlay layers (fully invisible via the AS3 `alpha` property, or without
+    /// any mouse listener of their own and not button-like). Some games place
+    /// full-screen decorative/transition overlays above their interactive
+    /// hit areas; with this enabled, clicks reach the hit areas below.
+    /// Defaults to `false` (exact Flash hit-testing semantics).
+    mouse_pick_fallthrough: bool,
+
     /// Self-reference to ourselves.
     ///
     /// This is a weak reference that is upgraded and handed out in various
@@ -2362,6 +2370,7 @@ impl Player {
                 start_time: this.start_time,
                 update_start: Instant::now(),
                 max_execution_duration: this.max_execution_duration,
+                mouse_pick_fallthrough: this.mouse_pick_fallthrough,
                 focus_tracker: stage.focus_tracker(),
                 times_get_time_called: 0,
                 time_offset: &mut this.time_offset,
@@ -2653,6 +2662,7 @@ pub struct PlayerBuilder {
     fullscreen: bool,
     letterbox: Letterbox,
     max_execution_duration: Duration,
+    mouse_pick_fallthrough: bool,
     viewport_width: u32,
     viewport_height: u32,
     viewport_scale_factor: f64,
@@ -2712,6 +2722,7 @@ impl PlayerBuilder {
             } else {
                 15
             }),
+            mouse_pick_fallthrough: false,
             viewport_width: 550,
             viewport_height: 400,
             viewport_scale_factor: 1.0,
@@ -2847,6 +2858,13 @@ impl PlayerBuilder {
     #[inline]
     pub fn with_max_execution_duration(mut self, duration: Duration) -> Self {
         self.max_execution_duration = duration;
+        self
+    }
+
+    /// Enables mouse-pick fallthrough for "dead" overlay layers.
+    #[inline]
+    pub fn with_mouse_pick_fallthrough(mut self, value: bool) -> Self {
+        self.mouse_pick_fallthrough = value;
         self
     }
 
@@ -3109,6 +3127,7 @@ impl PlayerBuilder {
                 time_offset: 0,
                 time_til_next_timer: None,
                 max_execution_duration: self.max_execution_duration,
+                mouse_pick_fallthrough: self.mouse_pick_fallthrough,
                 actions_since_timeout_check: 0,
 
                 // Input

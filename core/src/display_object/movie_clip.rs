@@ -3237,10 +3237,12 @@ impl<'gc> TInteractiveObject<'gc> for MovieClip<'gc> {
 
                 match res {
                     Avm2MousePick::Hit(target) => {
-                        // Compatibility: skip "dead" children that can never
-                        // react to the mouse, so that the pick continues with
-                        // lower siblings (e.g. full-screen walkable hit areas
-                        // placed below decorative overlays):
+                        // Opt-in compatibility (see
+                        // `PlayerBuilder::with_mouse_pick_fallthrough`):
+                        // skip "dead" children that can never react to the
+                        // mouse, so that the pick continues with lower siblings
+                        // (e.g. full-screen walkable hit areas placed below
+                        // decorative overlays):
                         //  1. target chains fully invisible via the AS3 `alpha`
                         //     property (leftover transition overlays). Overlays
                         //     made transparent via ColorTransform keep
@@ -3248,20 +3250,22 @@ impl<'gc> TInteractiveObject<'gc> for MovieClip<'gc> {
                         //  2. targets that have no mouse listener on themselves
                         //     and are not buttons/text fields (nothing could
                         //     ever react to this hit).
-                        let mut cur = Some(target.as_displayobject());
-                        let mut invisible = false;
-                        while let Some(d) = cur {
-                            if d.alpha() == 0.0 {
-                                invisible = true;
-                                break;
+                        if context.mouse_pick_fallthrough {
+                            let mut cur = Some(target.as_displayobject());
+                            let mut invisible = false;
+                            while let Some(d) = cur {
+                                if d.alpha() == 0.0 {
+                                    invisible = true;
+                                    break;
+                                }
+                                cur = d.parent();
                             }
-                            cur = d.parent();
-                        }
-                        if invisible {
-                            continue;
-                        }
-                        if !crate::player::object_reacts_to_mouse(context, target) {
-                            continue;
+                            if invisible {
+                                continue;
+                            }
+                            if !crate::player::object_reacts_to_mouse(context, target) {
+                                continue;
+                            }
                         }
                         return res.combine_with_parent(self.into());
                     }

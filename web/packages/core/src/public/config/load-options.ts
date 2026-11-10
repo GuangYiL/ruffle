@@ -549,6 +549,16 @@ export interface BaseLoadOptions {
     maxExecutionDuration?: Duration;
 
     /**
+     * Compatibility tweak for games that place full-screen decorative or
+     * leftover transition overlays above their interactive hit areas: let
+     * mouse picks fall through "dead" overlay layers (fully invisible via
+     * the AS3 `alpha` property, or without any mouse listener of their own
+     * and not button-like). Off by default (exact Flash hit-testing).
+     * @default false
+     */
+    mousePickFallthrough?: boolean;
+
+    /**
      * Specifies the base directory or URL used to resolve all relative path statements in the SWF file.
      * null means the current directory.
      *

@@ -32,6 +32,7 @@ export const DEFAULT_CONFIG: Required<BaseLoadOptions> = {
     preloader: true,
     splashScreen: true,
     maxExecutionDuration: 15,
+    mousePickFallthrough: false,
     base: null,
     menu: true,
     allowFullscreen: false,

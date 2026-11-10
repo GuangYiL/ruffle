@@ -89,6 +89,9 @@ export function configureBuilder(
             parseDuration(config.maxExecutionDuration),
         );
     }
+    if (isExplicit(config.mousePickFallthrough)) {
+        builder.setMousePickFallthrough(config.mousePickFallthrough);
+    }
     if (isExplicit(config.playerVersion)) {
         builder.setPlayerVersion(config.playerVersion);
     }

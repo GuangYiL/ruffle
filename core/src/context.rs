@@ -196,6 +196,10 @@ pub struct UpdateContext<'gc> {
     /// is raised. This defaults to 15 seconds but can be changed.
     pub max_execution_duration: Duration,
 
+    /// Opt-in: AVM2 mouse picks fall through "dead" overlay layers
+    /// (see `PlayerBuilder::with_mouse_pick_fallthrough`).
+    pub mouse_pick_fallthrough: bool,
+
     /// A tracker for the current keyboard focused element
     pub focus_tracker: FocusTracker<'gc>,
 
